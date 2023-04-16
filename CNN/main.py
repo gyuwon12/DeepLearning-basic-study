@@ -31,8 +31,8 @@ def main():
     train_loader, test_loader = Dataloader.make_dataloader(row_train_data, row_test_data, batch_size)
     
     
-    # Model 정의
-    model = Model.GoogleNet().to(device) # device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # Model 정의, 원하는 모델을 불러와서 쓸것.
+    model = Model.DenseNet().to(device) # device = 'cuda' if torch.cuda.is_available() else 'cpu'
     #model = Model.VGG(arch=Model.vgg_arch()).to(device) # device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(model)
     
@@ -48,6 +48,6 @@ def main():
     Train.train_model(model, device, train_loader, optimizer, My_loss, epochs)
     
     # Test
-    #Train.test_model_2(model, device, test_loader)
+    Train.test_model_2(model, device, test_loader)
     
 main()

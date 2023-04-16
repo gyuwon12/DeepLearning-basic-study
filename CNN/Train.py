@@ -16,7 +16,7 @@ def train_model(model, device, train_loader, optimizer, loss, epochs=20):
             my_loss.backward() #역전파
             optimizer.step() #최적화 
             # 각 배치마다 계산된 손실값의 평균 구하기 
-            avg_loss += my_loss / total_batch
+            avg_loss += my_loss.item() / total_batch # my_loss.item()을 해줘야 메모리 초과 방지 가능
             
         print('[Epoch: {:>2}] loss = {:>.5}'.format(epoch + 1, avg_loss))
     

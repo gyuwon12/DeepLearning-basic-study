@@ -29,9 +29,9 @@ def get_data_lenet_version():
 def get_data_Imagenet_version():
     root_link = 'MNIST_data/'
     new_transforms=transforms.Compose([
-                               transforms.Resize((94, 96)), # Imagenet 데이터셋 크기와 맞게 하려고
+                               transforms.Resize((96, 96)), # Imagenet 데이터셋 크기와 맞게 하려고
                                # (224, 224) -> Alexnet, VGG, Nin
-                               # (96, 96) -> GoogleNet
+                               # (96, 96) -> GoogleNet, Resnet
                                transforms.ToTensor(),
                                ])
     # torchvision.transforms.Compose 클래스: 파라미터로써 compose를 할 Transform 객체의 리스트인 transforms를 받음

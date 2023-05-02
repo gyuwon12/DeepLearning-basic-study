@@ -8,7 +8,7 @@ import torch.optim as optim
 import loss
 import models
 import train
-import data_Preprocessing
+import data_preprocessing
 import test
 
 # Hyperparameters
@@ -29,7 +29,7 @@ def main():
         torch.cuda.manual_seed_all(777)
     
     # Data Preprocessing
-    dataloader, dedup_word_number = data_Preprocessing.make_dataloader_ver1(sequence_length, batch_size)
+    dataloader, dedup_word_number = data_preprocessing.make_dataloader_ver1(sequence_length, batch_size)
     
     # 모델, 손실 함수, 옵티마이저 정의하기
     model = models.BiGRU(num_inputs=dedup_word_number, num_hiddens=hidden_size, num_layers=1, num_outputs=dedup_word_number)

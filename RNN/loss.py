@@ -8,6 +8,6 @@ class My_Loss(nn.Module):
         self.Loss = nn.CrossEntropyLoss().to(device)
 
     def forward(self, hypothesis, Y): # hypothesis = model, Y = real value
-        #loss는 (input, target) 이런식으로 계산하게 되는듯
+        # loss는 (input, target) 이런식으로 계산하게 되는듯
         loss = self.Loss(hypothesis, Y)
         return loss

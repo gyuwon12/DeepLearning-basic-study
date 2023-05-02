@@ -5,11 +5,12 @@ import torch.optim as optim
 #from torchsummary import summary
 
 # My module    
-import Loss
-import Model
-import Dataloader
-import Datadownload
-import Train
+import loss
+import models
+import dataloader
+import datadownload
+import train
+import test
 
 # Hyperparameters
 learning_rate = 0.001
@@ -27,17 +28,17 @@ def main():
     print(device)
         
     # DownLoading Dataset and Make Dataloader
-    row_train_data, row_test_data = Datadownload.get_data_Imagenet_version()
-    train_loader, test_loader = Dataloader.make_dataloader(row_train_data, row_test_data, batch_size)
+    row_train_data, row_test_data = datadownload.get_data_Imagenet_version()
+    train_loader, test_loader = dataloader.make_dataloader(row_train_data, row_test_data, batch_size)
     
     
     # Model 정의, 원하는 모델을 불러와서 쓸것.
-    model = Model.DenseNet().to(device) # device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    #model = Model.VGG(arch=Model.vgg_arch()).to(device) # device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print(model)
+    model = models.DenseNet().to(device) 
+    #model = Model_.VGG(arch=Model.vgg_arch()).to(device) 
+    #print(model)
     
     # Loss와 Optim 정의
-    My_loss = Loss.My_Loss(device = device)
+    criterion = loss.My_Loss(device = device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     
     total_batch = len(train_loader)
@@ -45,9 +46,9 @@ def main():
     # 60000/128 = 468.x
     
     # Train
-    Train.train_model(model, device, train_loader, optimizer, My_loss, epochs)
+    train.train_model(model, device, train_loader, optimizer, criterion, epochs)
     
     # Test
-    Train.test_model_2(model, device, test_loader)
+    test.test_model_2(model, device, test_loader)
     
 main()

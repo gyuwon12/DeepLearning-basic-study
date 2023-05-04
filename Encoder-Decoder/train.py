@@ -5,16 +5,10 @@ def train_model(model, device, len_tar_vocab, train_loader, optimizer, criterion
         for i, (encoder_inputs, decoder_inputs, decoder_targets)  in enumerate(train_loader): 
             encoder_inputs = encoder_inputs.to(device)
             decoder_inputs = decoder_inputs.to(device)
-            decoder_targets = decoder_targets.to(device) # decoder_target shape : (batch_size, sequence_length) 에시 : (1024, 16)
+            decoder_targets = decoder_targets.to(device) # decoder_target shape : (batch_size, sequence_length) 에시 : (1024, 32)
             
-            # Encoder Forward
-            enc_all_outputs = model.encoder(encoder_inputs) # enc_all_outputs =  encoder_outputs, encoder_state 인 것
-            
-            # Encoder state -> Decoder
-            state = model.decoder.init_state(enc_all_outputs)
-            
-            # Decoder Forward
-            decoder_outputs, decoder_state = model.decoder(decoder_inputs, state)
+            # Forward
+            decoder_outputs = model(encoder_inputs, decoder_inputs) # 곧 예측값
             # decoder_outputs shape : (batch_size, sequence_length, vocab_size)
             
             # loss 계산

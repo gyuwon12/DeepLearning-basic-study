@@ -32,10 +32,14 @@ class EncoderDecoder(nn.Module):
         self.decoder = decoder
         
     def forward(self, enc_X, dec_X, *args):
-        enc_all_outputs = self.encoder(enc_X, *args)
+        # Encoder forward 과정
+        enc_all_outputs = self.encoder(enc_X, *args) # enc_all_outputs =  encoder_outputs, encoder_state 인 것
+        # Encoder -> Decoder 과정
         dec_state = self.decoder.init_state(enc_all_outputs, *args)
-        # Return decoder output only
+        # Return decoder output only, Decoder forward 과정
         return self.decoder(dec_X, dec_state)[0]
+        # self.decoder의 output은 tuple 형태야 : (decoder_outputs, decoder_state)
+        # train엔 decoder_outputs만 필요하니까 인덱싱을 한것.
     
 # Encoder-Decodr Seq2Seq for Machine Translation
 def init_seq2seq(module):
@@ -54,7 +58,7 @@ class Seq2SeqEncoder(Encoder):
         """Seq2Seq Enocder에 해당하는 모델 구조
 
         Args:
-            vocab_size (int): _전체 단어의 사이즈라고 보면된다, 나의 데이터의 경우 인코더에 들어가는 (영어 데이터인 것) vocab_size = 14969._
+            vocab_size (int): _전체 단어의 사이즈라고 보면된다, 나의 데이터의 경우 인코더에 들어가는 (영어 데이터인 것) vocab_size = 15646._
             embed_size (int): _임베딩 레이어 구조를 정의하기 위한 변수, 128, 256 등의 값들이 사용 됨._
             num_hiddens (int): _RNN layer num_hiddens._
             num_layers (int): _RNn layer num_layers._
@@ -66,7 +70,7 @@ class Seq2SeqEncoder(Encoder):
         self.apply(init_seq2seq)
         
     def forward(self, X, *args):
-        # X shape : (batch_size, sequence_length) -> 예시 : (1024, 8)
+        # X shape : (batch_size, sequence_length) -> 예시 : (1024, 32)
         embs = self.embedding(X.t().type(torch.int64)) # why..? transpose? -> decoder에서 context는 "마지막 state"이란 의미가 있음
         # "마지막" sequence를 고려해주기 편하려고 여기서 transfose를 하는것.
         # embs shape : (sequence_length, batch_size, embed_size)
@@ -81,7 +85,7 @@ class Seq2SeqDecoder(Decoder):
         """Seq2Seq Dnocder에 해당하는 모델 구조
 
         Args:
-            vocab_size (int): _전체 단어의 사이즈라고 보면된다, 나의 데이터의 경우 인코더에 들어가는 (프랑스어 데이터인 것) vocab_size = 24980_
+            vocab_size (int): _전체 단어의 사이즈라고 보면된다, 나의 데이터의 경우 인코더에 들어가는 (프랑스어 데이터인 것) vocab_size = 25131_
             embed_size (int): _임베딩 레이어 구조를 정의하기 위한 변수, 128, 256 등의 값들이 사용 됨._
             num_hiddens (int): _RNN layer num_hiddens._
             num_layers (int): _RNn layer num_layers._
@@ -98,7 +102,7 @@ class Seq2SeqDecoder(Decoder):
         return enc_all_outputs
         
     def forward(self, X, state):
-        # X shape : (batch_size, sequence_length) -> 예시 : (1024, 16), X는 decoder input
+        # X shape : (batch_size, sequence_length) -> 예시 : (1024, 32), X는 decoder input
         # state -> all enocder output : encoder_output, encoder_state 형태
         embs = F.relu(self.embedding(X.t().type(torch.int64)))
         # embs shape : (sequence_length, batch_size, embed_size)

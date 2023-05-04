@@ -17,12 +17,12 @@ Go.	En route !	CC-BY 2.0 (France) Attribution: tatoeba.org #2877272 (CM) & #8267
 load_preprocessed_data() 함수에서 이를 적용해 src_line, tar_line으로 'CC-' 부분을 제외하고 처리한다.
 
 Tensor 형태의 data form을 만드는 것은 build_array() 함수에서 최종적으로 진행된다.
-출력해보니 영어 데이터의 vocab_size = 14969, 프랑스어는 24980으로 나왔다. 단어 수가 굉장히 많다.
+출력해보니 영어 데이터의 vocab_size = 15646, 프랑스어는 25131으로 나왔다. 단어 수가 굉장히 많다.
 
 최종 학습 데이터 구조는 아래와 같다.
-encoder input : torch.Size([217975, 8])
-decoder input : torch.Size([217975, 16])
-decoder target : torch.Size([217975, 16])
+encoder input : torch.Size([217975, 32])
+decoder input : torch.Size([217975, 32])
+decoder target : torch.Size([217975, 32])
 
 make_dataloader() 함수에서 위 3가지 tensor가 minibatch로 수정되어 훈련이 되도록 한다.
 """
@@ -84,8 +84,6 @@ def encoded_sentences(sentences):
     for sent in sentences:
         for word in sent:
             vocab.add(word)
-    vocab_size = len(vocab)
-    valid_vocab_size = len(vocab) - 2 # encode input은 <eos>와 <pad>를 제외한 것 나머지도 마찬가지로 <sos>와 <pad> / <eos>와 <pad>를 뺀 값
 
     # 단어장 인덱스 매핑
     word_to_index = {'<pad>': 0, '<sos>': 1, '<eos>': 2}
@@ -101,22 +99,23 @@ def encoded_sentences(sentences):
         
     # tensor로 변환
     encoded_sentences = torch.LongTensor(encoded_sentences)
-    return encoded_sentences, vocab_size, valid_vocab_size
+    return encoded_sentences, len(word_to_index), len(word_to_index) - 2 # -2 의미는 <pad>, <sos>, <eos>를 뺀 것
+    # 제외 항목 -> encoder_input : <eos>, <pad> / decoder_input : <sos>, <pad> / decoder_target : <eos>, <pad>
 
-def build_array():
+def build_array(sequence_length):
     encoder_input, decoder_input, decoder_target = load_preprocessed_data()
-    padding_en_input = padding(encoder_input, 8)
-    padding_de_input = padding(decoder_input, 16)
-    padding_de_target = padding(decoder_target, 16)
+    padding_en_input = padding(encoder_input, sequence_length)
+    padding_de_input = padding(decoder_input, sequence_length)
+    padding_de_target = padding(decoder_target, sequence_length)
     
     encoded_en_input, src_vocab, src_valid_len = encoded_sentences(padding_en_input)
-    encoded_de_input, _, _ = encoded_sentences(padding_de_input)
+    encoded_de_input, tar_vocab, _ = encoded_sentences(padding_de_input)
     encoded_de_target, _, _ = encoded_sentences(padding_de_target)
 
-    return encoded_en_input, encoded_de_input, encoded_de_target
+    return encoded_en_input, encoded_de_input, encoded_de_target, src_vocab, tar_vocab
 
-def make_dataloader(batch_size):
-    encoder_input, decoder_input, decoder_target = build_array()
+def make_dataloader(batch_size, sequence_length):
+    encoder_input, decoder_input, decoder_target, src_vocab, tar_vocab = build_array(sequence_length)
     # 데이터셋이 이미 텐서 형태라서, 데이터셋을 래핑하지 않고 데이터를 불러옵니다.
     train_data = TensorDataset(encoder_input, decoder_input, decoder_target)
     
@@ -129,7 +128,7 @@ def make_dataloader(batch_size):
         drop_last=True # 마지막 배치를 버릴지 여부 
         ) 
     
-    return trainloader
+    return trainloader, src_vocab, tar_vocab
 
 """
 seq2seq 모델의 학습 데이터셋은 보통 인코더의 입력 데이터와 디코더의 입력 데이터, 그리고 디코더의 출력 데이터로 이루어져 있습니다.

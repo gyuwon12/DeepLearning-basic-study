@@ -32,7 +32,7 @@ def main():
     dataloader, dedup_word_number = data_preprocessing.make_dataloader_ver1(sequence_length, batch_size)
     
     # 모델, 손실 함수, 옵티마이저 정의하기
-    model = models.BiGRU(num_inputs=dedup_word_number, num_hiddens=hidden_size, num_layers=1, num_outputs=dedup_word_number)
+    model = models.BiGRU(num_inputs=dedup_word_number, num_hiddens=hidden_size, num_layers=1, num_outputs=dedup_word_number).to(device)
     criterion = loss.My_Loss(device = device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     clipper = nn.utils.clip_grad_norm_(model.parameters(), max_norm) # Gradient Clipping을 위한 clipper 생성

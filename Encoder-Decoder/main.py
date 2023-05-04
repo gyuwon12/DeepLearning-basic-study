@@ -12,32 +12,36 @@ import data_preprocessing
 import test
 
 # Hyperparameters
+batch_size = 128
+epochs = 30
 sequence_length = 32
-batch_size = 1024
-hidden_size = 32 
-learning_rate = 0.05
-epochs = 100
-max_norm = 1.0 # Gradient Clipping을 위한 max_norm 값 설정
+num_hiddens = 256
+embed_size = 256
+num_layers = 2 
+dropout = 0.2
+learning_rate = 0.005
 
 def main():
     # GPU 정의
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     
     torch.manual_seed(777)  
-    if device == 'cuda':
+    if device == 'cuda:0':
         torch.cuda.manual_seed_all(777)
     
     # Data Preprocessing
-    trainloader = data_preprocessing.make_dataloader(batch_size)
+    trainloader, len_src_vocab, len_tar_vocab = data_preprocessing.make_dataloader(batch_size, sequence_length)
     
     # 모델, 손실 함수, 옵티마이저 정의하기
-    #model = models.BiGRU(num_inputs=dedup_word_number, num_hiddens=hidden_size, num_layers=1, num_outputs=dedup_word_number)
-    #criterion = loss.My_Loss(device = device)
-    #optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    #clipper = nn.utils.clip_grad_norm_(model.parameters(), max_norm) # Gradient Clipping을 위한 clipper 생성
+    encoder = models.Seq2SeqEncoder(len_src_vocab, embed_size, num_hiddens, num_layers, dropout).to(device)
+    decoder = models.Seq2SeqDecoder(len_tar_vocab, embed_size, num_hiddens, num_layers, dropout).to(device)
+    model = models.Seq2Seq(encoder, decoder).to(device)
+
+    criterion = loss.My_Loss(device = device)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
     # Train
-    #train.train_model(model, device, dedup_word_number, dataloader, optimizer, clipper, criterion, epochs)
+    train.train_model(model, device, len_tar_vocab, trainloader, optimizer, criterion, epochs)
     
     # prediction
     #test.generate_text(model, 'it has', 20, device)

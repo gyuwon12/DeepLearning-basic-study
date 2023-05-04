@@ -99,8 +99,8 @@ def encoded_sentences(sentences):
         
     # tensor로 변환
     encoded_sentences = torch.LongTensor(encoded_sentences)
-    return encoded_sentences, len(word_to_index), len(word_to_index) - 2 # -2 의미는 <pad>, <sos>, <eos>를 뺀 것
-    # 제외 항목 -> encoder_input : <eos>, <pad> / decoder_input : <sos>, <pad> / decoder_target : <eos>, <pad>
+    return encoded_sentences, len(word_to_index)+2, len(word_to_index) 
+    # valid 제외 항목 -> encoder_input : <eos>, <pad> / decoder_input : <sos>, <pad> / decoder_target : <eos>, <pad>
 
 def build_array(sequence_length):
     encoder_input, decoder_input, decoder_target = load_preprocessed_data()

@@ -1,6 +1,6 @@
 import torch
 
-def train_model(model, device, len_tar_vocab, train_loader, optimizer, criterion, num_epochs):
+def train_model(model, device, len_tar_vocab, train_loader, optimizer, clipper, criterion, num_epochs):
     for epoch in range(num_epochs): 
         for i, (encoder_inputs, decoder_inputs, decoder_targets)  in enumerate(train_loader): 
             encoder_inputs = encoder_inputs.to(device)
@@ -15,6 +15,7 @@ def train_model(model, device, len_tar_vocab, train_loader, optimizer, criterion
             loss = criterion(decoder_outputs.reshape(-1, len_tar_vocab), decoder_targets.view(-1)) # loss 계산을 위해 2D, 1D
             optimizer.zero_grad() 
             loss.backward()
+            clipper
             optimizer.step()
             
             # 로그 출력

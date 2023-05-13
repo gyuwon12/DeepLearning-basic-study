@@ -60,7 +60,7 @@ class LSTM(nn.Module):
     def __init__(self, num_inputs, num_hiddens, num_outputs):
         super(LSTM, self).__init__()
         self.num_hiddens = num_hiddens
-        self.lstm = nn.LSTM(num_inputs, num_hiddens, batch_first=True)
+        self.lstm = nn.LSTM(num_inputs, num_hiddens)
         self.fc = nn.LazyLinear(num_outputs)
         
     def forward(self, x):
@@ -109,7 +109,7 @@ class GRU(nn.Module):
         super(GRU, self).__init__()
         self.num_hiddens = num_hiddens
         self.num_layers = num_layers
-        self.gru = nn.GRU(num_inputs, num_hiddens, num_layers, dropout=dropout, batch_first=True)
+        self.gru = nn.GRU(num_inputs, num_hiddens, num_layers, dropout=dropout)
         self.dropout = nn.Dropout(dropout)
         self.fc = nn.LazyLinear(num_outputs)
         
@@ -131,7 +131,7 @@ class BiLSTM(nn.Module):
         super(BiLSTM, self).__init__()
         self.num_hiddens = num_hiddens
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(num_inputs, num_hiddens, num_layers, dropout=dropout, batch_first=True, bidirectional=True)
+        self.lstm = nn.LSTM(num_inputs, num_hiddens, num_layers, dropout=dropout, bidirectional=True)
         self.fc = nn.LazyLinear(num_outputs)
         self.dropout = nn.Dropout(dropout)
         #self.fc = nn.Linear(num_hiddens*2, num_outputs) # bidirection을 고려한 코드를 이렇게 짜주긴 해야함. lazy method가 편리한 것
@@ -158,7 +158,7 @@ class BiGRU(nn.Module):
         super(BiGRU, self).__init__()
         self.num_hiddens = num_hiddens
         self.num_layers = num_layers
-        self.gru = nn.GRU(num_inputs, num_hiddens, num_layers, dropout=dropout, batch_first=True, bidirectional=True)
+        self.gru = nn.GRU(num_inputs, num_hiddens, num_layers, dropout=dropout, bidirectional=True)
         self.dropout = nn.Dropout(dropout)
         self.fc = nn.LazyLinear(num_outputs)
         

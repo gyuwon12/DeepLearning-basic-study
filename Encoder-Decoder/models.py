@@ -4,6 +4,9 @@ from torch.nn import functional as F
 import collections
 import math
 
+
+import utils
+
 # Encoder - Decoder base architcture
 class Encoder(nn.Module):
     """The base encoder interface for the encoder-decoder architecture."""
@@ -66,7 +69,7 @@ class Seq2SeqEncoder(Encoder):
         """
         super(Seq2SeqEncoder, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embed_size)
-        self.rnn = nn.GRU(embed_size, num_hiddens, num_layers, dropout=dropout, batch_first=True, bidirectional=False)
+        self.rnn = nn.GRU(embed_size, num_hiddens, num_layers, dropout=dropout, bidirectional=False)
         self.apply(init_seq2seq)
         
     def forward(self, X, *args):
@@ -94,7 +97,7 @@ class Seq2SeqDecoder(Decoder):
         super(Seq2SeqDecoder, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embed_size)
         # embed_size+num_hiddens이 된 이유 : Decoder의 input이 'context'와 'embedding'을 concat해서 들어가기 때문
-        self.rnn = nn.GRU(embed_size+num_hiddens, num_hiddens, num_layers, dropout=dropout, batch_first=True, bidirectional=False)
+        self.rnn = nn.GRU(embed_size+num_hiddens, num_hiddens, num_layers, dropout=dropout, bidirectional=False)
         self.fc = nn.LazyLinear(vocab_size)
         self.apply(init_seq2seq) # 뭐이게 없긴해도 정상적으로 작동하긴함, 단지 파라미터 초기화 느낌이라
     
@@ -125,3 +128,55 @@ class Seq2SeqDecoder(Decoder):
 class Seq2Seq(EncoderDecoder):
     def __init__(self, encoder, decoder, tat_pad=None, lr=None):
         super().__init__(encoder, decoder)
+        
+# Attention model
+class AttentionDecoder(Decoder):
+    """The base attention-based decoder interface"""
+    def __init__(self):
+        super(AttentionDecoder, self).__init__()
+
+    @property
+    def attention_weights(self):
+        raise NotImplementedError
+    
+class Seq2SeqAttentionDecoder(AttentionDecoder):
+    """Some Information about Seq2SeqAttentionDecoder"""
+    def __init__(self, vocab_size, embed_size, num_hiddens, num_layers, dropout=0.0):
+        super(Seq2SeqAttentionDecoder, self).__init__()
+        self.attention = utils.AdditiveAttention(num_hiddens, dropout)
+        self.embedding = nn.Embedding(vocab_size, embed_size)
+        self.rnn = nn.GRU(embed_size+num_hiddens, num_hiddens, num_layers, dropout=dropout, bidirectional=False)
+        self.fc = nn.LazyLinear(vocab_size)
+        self.apply(init_seq2seq)
+
+    def init_state(self, enc_all_outputs, enc_valid_lens):
+        # Shape of enc_outputs: (sequence_length, batch_size, num_hiddens)
+        # Shape of hidden_state: (num_layers, batch_size, num_hiddens)
+        enc_outputs, hidden_state = enc_all_outputs
+        return (enc_outputs.permute(1, 0, 2), hidden_state, enc_valid_lens) 
+    
+    def forward(self, X, state):
+        # Shape of enc_outputs: (batch_size, sequence_length, num_hiddens)
+        # Shape of hidden_state: (num_layers, batch_size, num_hiddens)
+        enc_outputs, hidden_state, enc_valid_lens = state # init_state의 결과물
+        # Shape of the X : (sequence_length, batch_size, embed_size), after applying permute method
+        X = self.embedding(X).permute(1, 0, 2)
+        outputs, self._attention_weights = [], []
+        for x in X:
+            # Shape of query : (batch_size, 1, num_hiddens)
+            query = torch.unsqueeze(hidden_state[-1], dim=1)
+            # Shape of context : (batch_size, 1, num_hiddens)
+            context = self.attention(query, enc_outputs, enc_outputs, enc_valid_lens)
+            # Concatenate on the feature dimension
+            x = torch.cat((context, torch.unsqueeze(x, dim=1)), dim=-1) # Reshape x as (1, batch_size, embed_size + num_hiddens)
+            out, hidden_state = self.rnn(x.permute(1, 0, 2), hidden_state)
+            outputs.append(out)
+            self._attention_weights.append(self.attention.attention_weights)
+        # After fully connected layer transformation, shape of outputs : (sequence_length, batch_size, vocab_size)
+        outputs = self.fc(torch.cat(outputs, dim=0))
+        return outputs.permute(1, 0, 2), [enc_outputs, hidden_state, enc_valid_lens]
+        # 최종 outputs shape : (batch_size, sequence_length, vocab_size)
+    
+    @property
+    def attention_weights(self):
+        return self._attention_weights

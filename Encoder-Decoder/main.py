@@ -20,6 +20,7 @@ embed_size = 256
 num_layers = 2 
 dropout = 0.2
 learning_rate = 0.005
+max_norm = 1.0 # Gradient Clipping을 위한 max_norm 값 설정
 
 def main():
     # GPU 정의
@@ -39,9 +40,10 @@ def main():
 
     criterion = loss.My_Loss(device = device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    clipper = nn.utils.clip_grad_norm_(model.parameters(), max_norm) # Gradient Clipping을 위한 clipper 생성
     
     # Train
-    train.train_model(model, device, len_tar_vocab, trainloader, optimizer, criterion, epochs)
+    train.train_model(model, device, len_tar_vocab, trainloader, optimizer, clipper, criterion, epochs)
     
     # prediction
     #test.generate_text(model, 'it has', 20, device)

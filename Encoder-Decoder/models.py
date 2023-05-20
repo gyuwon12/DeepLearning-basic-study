@@ -140,7 +140,8 @@ class AttentionDecoder(Decoder):
         raise NotImplementedError
     
 class Seq2SeqAttentionDecoder(AttentionDecoder):
-    """Some Information about Seq2SeqAttentionDecoder"""
+    """Some Information about Seq2SeqAttentionDecoder.
+    자세한 설명은 내 pdf 참고하자."""
     def __init__(self, vocab_size, embed_size, num_hiddens, num_layers, dropout=0.0):
         super(Seq2SeqAttentionDecoder, self).__init__()
         self.attention = utils.AdditiveAttention(num_hiddens, dropout)
@@ -180,3 +181,90 @@ class Seq2SeqAttentionDecoder(AttentionDecoder):
     @property
     def attention_weights(self):
         return self._attention_weights
+    
+# Transformer
+
+# Transformer Encoder
+class TransformerEncoderBlock(nn.Module):
+    """The following TransformerEncoderBlock class contains two sublayers: 
+    multi-head self-attention and positionwise feed-forward networks,
+    where a residual connection followed by layer normalization is employed around both sublayers."""
+    def __init__(self, num_hiddens, ffn_num_hiddens, num_heads, dropout, use_bias=False):
+        super(TransformerEncoderBlock, self).__init__()
+        self.mutli_attention = nn.MultiheadAttention(embed_dim=num_hiddens, num_heads=num_heads)
+        self.addnorm1 = utils.AddNorm(num_hiddens, dropout)
+        self.ffn = utils.PositionWiseFFN(ffn_num_hiddens, num_hiddens)
+        self.addnorm2 = utils.AddNorm(num_hiddens, dropout)
+        
+    def forward(self, X, valid_lens):
+        # nn.MultiheadAttention method는 output으로 2가지를 내놓는다는 것!
+        output, self._attention_weights = self.mutli_attention(X, X, X, attn_mask=valid_lens)
+        Y = self.addnorm1(X, output) # sub layer 1
+        return self.addnorm2(Y, self.ffn(Y)) # sub layer 2
+    
+    def attention_weights(self):
+        return self._attention_weights
+    
+class TransformerEncoder(Encoder):
+    """Transformer Encoder"""
+    def __init__(self, vocab_size, num_hiddens, ffn_num_hiddens, num_haeds, num_blks, dropout, use_bias=False):
+        super(TransformerEncoder, self).__init__()
+        self.num_hiddens = num_hiddens
+        self.embedding = nn.Embedding(vocab_size, num_hiddens)
+        self.pos_encoding = utils.PositionalEncoding(num_hiddens, dropout)
+        self.blks = nn.Sequential()
+        for i in range(num_blks):
+            self.blks.add_module("block"+str(i), 
+                                 TransformerEncoderBlock(num_hiddens, ffn_num_hiddens, num_haeds, dropout, use_bias))
+        
+    def forward(self, X):
+        # Since positional encoding values are between -1 and 1, the embedding
+        # values are multiplied by the square root of the embedding dimension to rescale before they are summed up
+        X = self.pos_encoding(self.embedding(X) * math.sqrt(self.num_hiddens))
+        self.attention_weights = [None] * len(self.blks)
+        for i, blk in enumerate(self.blks):
+            X = blk(X)
+            self.attention_weights[i] = blk.attention_weights()
+        return X
+    # The shape of the Transformer encoder output is (batch size, no. of time steps, num_hiddens)
+    
+# Transformer Decoder
+class TransformerDecoderBlock(nn.Module):
+    """Transformer Decoder Block.
+    The following TransformerDecoderBlock class, which contains three sublayers: 
+    decoder self-attention, encoder-decoder attention, and positionwise feed-forward networks. """
+    def __init__(self, num_hiddens, ffn_num_hiddens, num_heads, dropout, i):
+        super(TransformerDecoderBlock, self).__init__()
+        self.i = i
+        self.mutli_attention1 = nn.MultiheadAttention(num_hiddens, num_heads)
+        self.addnorm1 = utils.AddNorm(num_hiddens, dropout)
+        self.mutli_attention2 = nn.MultiheadAttention(num_hiddens, num_heads)
+        self.addnorm2 = utils.AddNorm(num_hiddens, dropout)
+        self.ffn = utils.PositionWiseFFN(ffn_num_hiddens, num_hiddens)
+        self.addnorm3 = utils.AddNorm(num_hiddens, dropout)
+        
+    def forward(self, X, state):
+        enc_outputs, enc_valid_lens = state[0], state[1]
+        # During training, all the tokens of any output sequence are processed
+        # at the same time, so state[2][self.i] is None as initialized. 
+        # When decoding any output sequence token by token during prediction,
+        # state[2][self.i] contains representations of the decoded output at the i-th block up to the current time step
+        if state[2][self.i] is None:
+            key_values = X
+        else:
+            key_values = torch.cat((state[2][self.i], X), dim=1)
+        state[2][self.i] = key_values
+        if self.training:
+            batch_size, num_steps, _ = X.shape
+            # Shape of dec_valid_lens: (batch_size, num_steps), where every row is [1, 2, ..., num_steps]
+            dec_valid_lens = torch.arange(1, num_steps + 1, device=X.device).repeat(batch_size, 1)
+        else:
+            dec_valid_lens = None
+        # Decoder Self Attention - sub layer 1
+        X2, _ = self.mutli_attention1(X, key_values, key_values)
+        Y = self.addnorm1(Y, X2)
+        # Encoder-Decoder Attention - sub layer 2
+        # Shape of enc_outputs : (batch_size, num_steps, num_hiddens)
+        Y2, _ = self.mutli_attention2(Y, enc_outputs, enc_outputs)
+        Z = self.addnorm2(Y, Y2)
+        return self.addnorm3(Z, self.ffn(Z)), state # sub layer 3

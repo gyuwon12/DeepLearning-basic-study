@@ -59,6 +59,7 @@ class DotProductAttention(nn.Module):
         self.attention_weights = masked_softmax(scores, valid_lens)
         return torch.bmm(self.dropout(self.attention_weights), values)
     
+# AdditiveAttention
 class AdditiveAttention(nn.Module):
     """Additive Attention.
     The biggest feature is that the scalar value is the result of the attention score function.
@@ -83,3 +84,98 @@ class AdditiveAttention(nn.Module):
         self.attention_weights = masked_softmax(scores, valid_lens)
         # Shape of values: (batch_size, no. of key-value pairs, value dimension)
         return torch.bmm(self.dropout(self.attention_weights), values)
+    
+# Multi-Head Attention
+class MultiHeadAttention(nn.Module):
+    """Multi-Head Attention.
+    In our implementation, we choose the scaled dot-product attention for each head of the multi-head attention.
+    nn.MultiheadAttention()은 self-attention도 수행함. 이 class와 다른 조건은 query, key, value tensor shape이 반드시 같아야 한다는 것."""
+    def __init__(self, num_hiddens, num_heads, dropout, bias=False, **kwargs):
+        super(MultiHeadAttention, self).__init__()
+        self.num_heads = num_heads
+        self.attention = DotProductAttention(dropout, num_heads)
+        self.W_q = nn.LazyLinear(num_hiddens, bias=bias)
+        self.W_k = nn.LazyLinear(num_hiddens, bias=bias)
+        self.W_v = nn.LazyLinear(num_hiddens, bias=bias)
+        self.W_o = nn.LazyLinear(num_hiddens, bias=bias) 
+        
+    def transpose_qkv(self, X):
+        """Transposition for parallel computation of multiple attention heads."""
+        # Shape of input X : (batch_size, no. of queries or key-value pairs, num_hiddens). 
+        # Shape of output X : (batch_size, no. of queries or key-value pairs, num_heads, num_hiddens / num_heads)
+        X = X.reshape(X.shape[0], X.shape[1], self.num_heads, -1)
+        # Shape of output X: (batch_size, num_heads, no. of queries or key-value pairs, num_hiddens / num_heads)
+        X = X.permute(0, 2, 1, 3)
+        # Shape of output: (batch_size * num_heads, no. of queries or key-value pairs, num_hiddens / num_heads)
+        return X.reshape(-1, X.shape[2], X.shape[3])
+    
+    def transpose_output(self, X):
+        """Reverse the operation of transpose_qkv."""
+        # transpose_qkv의 결과를 반대로 하기 위한 reverse 함수
+        X = X.reshape(-1, self.num_heads, X.shape[1], X.shape[2])
+        X = X.permute(0, 2, 1, 3)
+        return X.reshape(X.shape[0], X.shape[1], -1)
+
+    def forward(self, queries, keys, values, valid_lens, window_mask=None):
+        # Shape of queries, keys, or values : (batch_size, no. of queries or key-value pairs, num_hiddens)
+        # Shape of valid_lens: (batch_size,) or (batch_size, no. of queries)
+        # After transposing, shape of output queries, keys, or values:
+        # (batch_size * num_heads, no. of queries or key-value pairs, num_hiddens / num_heads)
+        queries = self.transpose_qkv(self.W_q(queries))
+        keys = self.transpose_qkv(self.W_k(keys))
+        values = self.transpose_qkv(self.W_v(values))
+        
+        if valid_lens is not None:
+            # On axis 0, copy the first item (scalar or vector) for num_heads times, then copy the next item, and so on
+            valid_lens = torch.repeat_interleave(valid_lens, repeats=self.num_heads, dim=0)
+            
+        # Shape of output : (batch_size * num_heads, no. of queries, num_hiddens / num_heads)
+        output = self.attention(queries, keys, values, valid_lens, window_mask)
+        # Shape of output_concat : (batch_size, no. of queries, num_hiddens)
+        output_concat = self.transpose_output(output)
+        return self.W_o(output_concat)
+       
+# Positional Encoding
+class PositionalEncoding(nn.Module):
+    """Positional Encoding."""
+    def __init__(self, num_hiddens, dropout, max_len=1000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(dropout)
+        # Create a long enough P
+        self.P = torch.zeros((1, max_len, num_hiddens))
+        X = torch.arange(max_len, dtype=torch.float32).reshape(
+            -1, 1) / torch.pow(10000, torch.arange(
+            0, num_hiddens, 2, dtype=torch.float32) / num_hiddens)
+        self.P[:, :, 0::2] = torch.sin(X)
+        self.P[:, :, 1::2] = torch.cos(X)
+        
+    def forward(self, X):
+        X = X + self.P[:, :X.shape[1], :].to(X.device)
+        return self.dropout(X)
+
+# Position-Wise FFN
+class PositionWiseFFN(nn.Module):
+    """Some Information about PositionWiseFFN"""
+    def __init__(self, ffn_num_hiddens, ffn_num_outputs):
+        super(PositionWiseFFN, self).__init__()
+        self.dense1 = nn.LazyLinear(ffn_num_hiddens)
+        self.relu = nn.ReLU()
+        self.dense2 = nn.LazyLinear(ffn_num_outputs)
+
+    def forward(self, X):
+        # input shape X : (batch_size, no. of time steps or sequence length in tokens, no. of hidden units or feature dim)
+        return self.dense2(self.relu(self.dense1(X)))
+        # output shape : (batch_size, no. of time steps, ffn_num_outputs)
+        
+# Add & Norm
+class AddNorm(nn.Module):
+    """We can implement the AddNorm class using a residual connection followed by layer normalization."""
+    def __init__(self, norm_shape, dropout):
+        super(AddNorm, self).__init__()
+        self.dropout = nn.Dropout(dropout)
+        self.ln = nn.LayerNorm(norm_shape)
+        
+    def forward(self, X, Y):
+        # The residual connection requires that the two inputs are of the same shape 
+        # so that the output tensor also has the same shape after the addition operation.
+        return self.ln(self.dropout(Y) + X)

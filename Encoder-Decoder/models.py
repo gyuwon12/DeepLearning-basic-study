@@ -214,7 +214,7 @@ class TransformerEncoder(Encoder):
         self.pos_encoding = utils.PositionalEncoding(num_hiddens, dropout)
         self.blks = nn.Sequential()
         for i in range(num_blks):
-            self.blks.add_module("block"+str(i), 
+            self.blks.add_module("block"+str(i+1), 
                                  TransformerEncoderBlock(num_hiddens, ffn_num_hiddens, num_haeds, dropout, use_bias))
         
     def forward(self, X):
@@ -261,10 +261,49 @@ class TransformerDecoderBlock(nn.Module):
         else:
             dec_valid_lens = None
         # Decoder Self Attention - sub layer 1
-        X2, _ = self.mutli_attention1(X, key_values, key_values)
-        Y = self.addnorm1(Y, X2)
+        X2, self._de_atten_weight = self.mutli_attention1(X, key_values, key_values)
+        Y = self.addnorm1(X, X2)
         # Encoder-Decoder Attention - sub layer 2
-        # Shape of enc_outputs : (batch_size, num_steps, num_hiddens)
-        Y2, _ = self.mutli_attention2(Y, enc_outputs, enc_outputs)
+        # Shape of enc_outputs : (batch_size, num_steps, num_hiddens), residual connection 때문에
+        # the feature dimension (num_hiddens) of the decoder is the same as that of the encoder.
+        Y2, self._en_de_atten_weight = self.mutli_attention2(Y, enc_outputs, enc_outputs)
         Z = self.addnorm2(Y, Y2)
         return self.addnorm3(Z, self.ffn(Z)), state # sub layer 3
+    
+    def de_self_atten_weight(self):
+        return self._de_atten_weight
+    
+    def en_de_atten_weight(self):
+        return self._en_de_atten_weight
+    
+class TransformerDecoder(AttentionDecoder):
+    """Some Information about TransformerDecoder"""
+    def __init__(self, vocab_size, num_hiddens, ffn_num_hiddens, num_heads, num_blks, dropout):
+        super(TransformerDecoder, self).__init__()
+        self.num_hideens = num_hiddens
+        self.num_blks = num_blks
+        self.embedding = nn.Embedding(vocab_size, num_hiddens)
+        self.pos_encoding = utils.PositionalEncoding(num_hiddens, dropout)
+        self.blks = nn.Sequential()
+        for i in range(num_blks):
+            self.blks.add_module("block"+str(i+1), 
+                                 TransformerDecoderBlock(num_hiddens, ffn_num_hiddens, num_heads, dropout, i))
+        self.fc = nn.LazyLinear(vocab_size)
+        
+    def init_state(self, enc_outputs, enc_valid_lens):
+        return [enc_outputs, enc_valid_lens, [None] * self.num_blks]
+        
+    def forward(self, X, state):
+        X = self.pos_encoding(self.embedding(X) * math.sqrt(self.num_hideens))
+        self._attention_weights = [[None] * len(self.blks) for _ in range (2)] # init
+        for i, blk in enumerate(self.blks):
+            X, state = blk(X, state)
+            # Decoder self-attention weights
+            self._attention_weights[0] = blk.de_self_atten_weight()
+            # Encoder-decoder attention weights
+            self._attention_weights[1] = blk.en_de_atten_weight()
+        return self.fc(X), state
+    
+    @property
+    def attention_weights(self):
+        return self._attention_weights

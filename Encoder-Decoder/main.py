@@ -12,14 +12,17 @@ import data_preprocessing
 import test
 
 # Hyperparameters
-batch_size = 128
+# "Attention is all you need" 내에서의 hyperparameter를 표기.
+batch_size = 4096
 epochs = 30
 sequence_length = 32
-num_hiddens = 256
+num_hiddens = 512
+num_blks = 6
+ffn_num_hiddens, num_heads = 2048, 8
 embed_size = 256
 num_layers = 2 
-dropout = 0.2
-learning_rate = 0.005
+dropout = 0.1
+learning_rate = 0.015
 max_norm = 1.0 # Gradient Clipping을 위한 max_norm 값 설정
 
 def main():
@@ -34,18 +37,20 @@ def main():
     trainloader, len_src_vocab, len_tar_vocab = data_preprocessing.make_dataloader(batch_size, sequence_length)
     
     # 모델, 손실 함수, 옵티마이저 정의하기
-    encoder = models.Seq2SeqEncoder(len_src_vocab, embed_size, num_hiddens, num_layers, dropout).to(device)
-    decoder = models.Seq2SeqDecoder(len_tar_vocab, embed_size, num_hiddens, num_layers, dropout).to(device)
-    model = models.Seq2Seq(encoder, decoder).to(device)
-
+    seq2seq_encoder = models.Seq2SeqEncoder(len_src_vocab, embed_size, num_hiddens, num_layers, dropout).to(device)
+    seq2seq_decoder = models.Seq2SeqDecoder(len_tar_vocab, embed_size, num_hiddens, num_layers, dropout).to(device)
+    model = models.Seq2Seq(seq2seq_encoder, seq2seq_decoder).to(device)
+    
+    transforemr_encoder = models.TransformerEncoder(len_src_vocab, num_hiddens, ffn_num_hiddens, num_heads, num_blks, dropout).to(device)
+    transformer_decoder = models.TransformerDecoder(len_tar_vocab, num_hiddens, ffn_num_hiddens, num_heads, num_blks, dropout).to(device)
+    model = models.Seq2Seq(transforemr_encoder, transformer_decoder).to(device)
+    
     criterion = loss.My_Loss(device = device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     clipper = nn.utils.clip_grad_norm_(model.parameters(), max_norm) # Gradient Clipping을 위한 clipper 생성
     
     # Train
     train.train_model(model, device, len_tar_vocab, trainloader, optimizer, clipper, criterion, epochs)
-    
-    # prediction
-    #test.generate_text(model, 'it has', 20, device)
+
     
 main()
